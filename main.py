@@ -6,27 +6,32 @@ import curses, random, json
 class geradorLabirinto:
     def __init__(self):
         self.nColunas = 50
-        self.nLinhas = 50
+        self.nLinhas = 20
         self.nVazio = 2
         self.parede = '#'
         self.vazio = ' '
         self.labirinto = []
 
     def inicializaLabirinto(self):
-        # Começa com tudo parede
         self.labirinto = [[self.parede for _ in range(self.nColunas)] for _ in range(self.nLinhas)]
 
-        # Cria pontos de entrada para o algoritmo cavar
         for linha in range(1, self.nLinhas, self.nVazio):
             for coluna in range(1, self.nColunas, self.nVazio):
                 self.labirinto[linha][coluna] = self.vazio
                 self.criaCaminho(linha, coluna)
 
-        # Entrada e saída em posições acessíveis
         self.labirinto[1][1] = 'S'
         self.labirinto[self.nLinhas - 2][self.nColunas - 2] = 'E'
 
-        # Salva o mapa em json
+        # adiciona itens aleatórios
+        for _ in range(10):
+            while True:
+                y = random.randint(1, self.nLinhas - 2)
+                x = random.randint(1, self.nColunas - 2)
+                if self.labirinto[y][x] == self.vazio:
+                    self.labirinto[y][x] = '*'
+                    break
+
         self.exportaLabirinto()
         return self.labirinto
     
@@ -55,6 +60,8 @@ class explorarMapa:
         self.nLinhasVisiveis = 20
         self.parede = '#'
         self.vazio = ' '
+        self.item = '*'
+        self.saida = 'E'
         self.personagem = '@'
         self.labirinto = []
         self.posicaoX = 1
@@ -69,6 +76,7 @@ class explorarMapa:
         self.nLinhas = len(self.labirinto)
         self.nColunas = len(self.labirinto[0]) if self.nLinhas > 0 else 0
         self.posicaoX, self.posicaoY = self.encontraPosicaoInicial()
+        self.atualizaOffset()
         return self.labirinto
     
     def encontraPosicaoInicial(self):
@@ -76,20 +84,42 @@ class explorarMapa:
             for x, celula in enumerate(linha):
                 if celula == 'S':
                     return x, y
-        return 1, 1  # fallback
+        return 1, 1
     
+    def atualizaOffset(self):
+        meioX = self.nColunasVisiveis // 2
+        meioY = self.nLinhasVisiveis // 2
+        self.offsetX = self.posicaoX - meioX
+        self.offsetY = self.posicaoY - meioY
+
+        if self.offsetX < 0:
+            self.offsetX = 0
+        if self.offsetY < 0:
+            self.offsetY = 0
+        if self.offsetX + self.nColunasVisiveis > self.nColunas:
+            self.offsetX = self.nColunas - self.nColunasVisiveis
+        if self.offsetY + self.nLinhasVisiveis > self.nLinhas:
+            self.offsetY = self.nLinhas - self.nLinhasVisiveis
+
     def exibeMapa(self, stdscr):
         stdscr.clear()
         for y in range(self.nLinhasVisiveis):
             for x in range(self.nColunasVisiveis):
+                col = x * 2
                 mapaX = x + self.offsetX
                 mapaY = y + self.offsetY
                 if 0 <= mapaX < self.nColunas and 0 <= mapaY < self.nLinhas:
                     char = self.labirinto[mapaY][mapaX]
                     if mapaX == self.posicaoX and mapaY == self.posicaoY:
-                        stdscr.addstr(y, x * 2, self.personagem * 2, curses.color_pair(1))
+                        stdscr.addstr(y, col, self.personagem, curses.color_pair(1))
+                    elif char == self.parede:
+                        stdscr.addstr(y, col, char, curses.color_pair(2))
+                    elif char == self.item:
+                        stdscr.addstr(y, col, char, curses.color_pair(3))
+                    elif char == self.saida:
+                        stdscr.addstr(y, col, char, curses.color_pair(4))
                     else:
-                        stdscr.addstr(y, x * 2, char * 2)
+                        stdscr.addstr(y, col, char, curses.color_pair(5))
         stdscr.refresh()
                     
     def movePersonagem(self, key):
@@ -109,7 +139,6 @@ class explorarMapa:
                     self.posicaoX, self.posicaoY = novaX, novaY
                     self.atualizaOffset()
 
-
     def iniciarExploracao(self, arquivo):
         self.carregaLabirinto(arquivo)
         curses.wrapper(self.loopPrincipal)
@@ -117,7 +146,11 @@ class explorarMapa:
     def loopPrincipal(self, stdscr):
         curses.curs_set(0)
         curses.start_color()
-        curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # personagem
+        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)  # parede
+        curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK) # item
+        curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLACK)   # saída
+        curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_BLACK)  # vazio
         stdscr.nodelay(True)
         stdscr.timeout(100)
         while True:
@@ -126,25 +159,6 @@ class explorarMapa:
             if key == ord('q'):
                 break
             self.movePersonagem(key)
-
-    def atualizaOffset(self):
-        meioX = self.nColunasVisiveis // 2
-        meioY = self.nLinhasVisiveis // 2
-        self.offsetX = self.posicaoX - meioX
-        self.offsetY = self.posicaoY - meioY
-
-        # não deixar passar da borda esquerda/superior
-        if self.offsetX < 0:
-            self.offsetX = 0
-        if self.offsetY < 0:
-            self.offsetY = 0
-
-        # não deixar passar da borda direita/inferior
-        if self.offsetX + self.nColunasVisiveis > self.nColunas:
-            self.offsetX = self.nColunas - self.nColunasVisiveis
-        if self.offsetY + self.nLinhasVisiveis > self.nLinhas:
-            self.offsetY = self.nLinhas - self.nLinhasVisiveis
-
 
 
 # ========================
