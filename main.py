@@ -6,7 +6,7 @@ import curses, random, json
 class geradorLabirinto:
     def __init__(self):
         self.nColunas = 50
-        self.nLinhas = 20
+        self.nLinhas = 50
         self.nVazio = 2
         self.parede = '#'
         self.vazio = ' '
@@ -49,7 +49,6 @@ class geradorLabirinto:
     def exportaLabirinto(self):
         with open(f'labirinto{self.nColunas}x{self.nLinhas}.json', 'w') as f:
             json.dump(self.labirinto, f)
-
 
 # ========================
 # EXPLORADOR DO LABIRINTO
@@ -111,15 +110,45 @@ class explorarMapa:
                 if 0 <= mapaX < self.nColunas and 0 <= mapaY < self.nLinhas:
                     char = self.labirinto[mapaY][mapaX]
                     if mapaX == self.posicaoX and mapaY == self.posicaoY:
-                        stdscr.addstr(y, col, self.personagem, curses.color_pair(1))
+                        # stdscr.addstr(y, col, self.personagem, curses.color_pair(1))
+                        personagem = utilidadesCurses()
+                        personagem.stdscr = stdscr
+                        personagem.x = col
+                        personagem.y = y
+                        personagem.cor = curses.color_pair(1)
+                        personagem.safeAddch(self.personagem)
                     elif char == self.parede:
-                        stdscr.addstr(y, col, char, curses.color_pair(2))
+                        # stdscr.addstr(y, col, char, curses.color_pair(2))
+                        parede = utilidadesCurses()
+                        parede.stdscr = stdscr
+                        parede.x = col
+                        parede.y = y
+                        parede.cor = curses.color_pair(2)
+                        parede.safeAddch(char)
                     elif char == self.item:
-                        stdscr.addstr(y, col, char, curses.color_pair(3))
+                        # stdscr.addstr(y, col, char, curses.color_pair(3))
+                        item = utilidadesCurses()
+                        item.stdscr = stdscr
+                        item.x = col
+                        item.y = y
+                        item.cor = curses.color_pair(3)
+                        item.safeAddch(char)
                     elif char == self.saida:
-                        stdscr.addstr(y, col, char, curses.color_pair(4))
+                        # stdscr.addstr(y, col, char, curses.color_pair(4))
+                        saida = utilidadesCurses()
+                        saida.stdscr = stdscr
+                        saida.x = col
+                        saida.y = y
+                        saida.cor = curses.color_pair(4)
+                        saida.safeAddch(char)
                     else:
-                        stdscr.addstr(y, col, char, curses.color_pair(5))
+                        # stdscr.addstr(y, col, char, curses.color_pair(5))
+                        vazio = utilidadesCurses()
+                        vazio.stdscr = stdscr
+                        vazio.x = col
+                        vazio.y = y
+                        vazio.cor = curses.color_pair(5)
+                        vazio.safeAddch(char)
         stdscr.refresh()
                     
     def movePersonagem(self, key):
@@ -160,6 +189,101 @@ class explorarMapa:
                 break
             self.movePersonagem(key)
 
+# ========================
+# OBJETOS
+# ========================
+class objeto:
+    def __init__(self):
+        self.nome = ''
+        self.descricao = ''
+        self.posiX = 0
+        self.posiY = 0
+    
+    def definirObjeto(self, nome, descricao, posiX, posiY):
+        self.nome = nome
+        self.descricao = descricao
+        self.posiX = posiX
+        self.posiY = posiY
+
+    def propriedades(self):
+        tipos = {
+            'solido': 'Sólido',
+            'coletavel': 'Coletável',
+            'interativo': 'Interativo',
+        }
+        cores = {
+            'solido': curses.COLOR_WHITE,
+            'coletavel': curses.COLOR_YELLOW,
+            'interativo': curses.COLOR_CYAN
+        }
+        return tipos.get(self.nome, 'Desconhecido'), cores.get(self.nome, curses.COLOR_MAGENTA)
+    
+    def exibir(self, stdscr):
+        tipo, cor = self.propriedades()
+        
+# ========================
+# UTILIDADES CURSES
+# ========================
+class utilidadesCurses:
+    def __init__(self):
+        self.stdscr = None
+        self.x = 0
+        self.y = 0
+        self.coluna = 0
+        self.linha = 0
+        self.minLinha = 0
+        self.minColuna = 0
+        self.coresAtivos = False
+        self.cor = curses.COLOR_WHITE
+        
+    def safeAddstr(self, string):
+        try:
+            rows, cols = self.stdscr.getmaxyx()
+            # Verifica se a posição é válida dentro da tela
+            if self.y < 0 or self.y >= rows or self.x < 0 or self.x >= cols:
+                return
+            # Calcula quantos caracteres ainda cabem na linha
+            maxLen = cols - self.x
+            if maxLen <= 0:
+                return
+            # Escreve o texto limitado ao espaço disponível
+            self.stdscr.addstr(self.y, self.x, string[:maxLen])
+        except curses.error:
+            pass  # Ignora erros do curses quando não dá pra escrever
+
+    def safeAddch(self, ch):
+        try:
+            rows, cols = self.stdscr.getmaxyx()
+            # Só escreve se estiver dentro da tela
+            if 0 <= self.y < rows and 0 <= self.x < cols:
+                # ch deve ser apenas um caractere
+                self.stdscr.addch(self.y, self.x, ch, self.cor)
+        except curses.error:
+            pass
+
+    def safeTerminalSize(self):
+        # Verifica se o terminal atende os requisitos mínimos
+        if self.linha < self.minLinha or self.coluna < self.minColuna:
+            # Se for muito pequeno, mostra mensagens adaptadas
+            if self.linha < 3:
+                if self.linha >= 1 and self.linha >= 20:
+                    self.safeAddstr("TERMINAL MUITO PEQUENO!")
+                if self.linha >= 2 and self.coluna >= 15:
+                    self.safeAddstr(f"{self.linha}L x {self.coluna}C - AUMENTE O TERMINAL!")
+            else:
+                # Mostra informações mais completas quando tem mais linhas
+                self.safeAddstr('=' * min(40, self.coluna))
+                if self.linha >= 2:
+                    self.safeAddstr('TERMINAL MUITO PEQUENO!')
+                if self.linha >= 3:
+                    self.safeAddstr(f'Min: {self.minLinha}L x {self.minColuna}C')
+                if self.linha >= 4:
+                    self.safeAddstr(f'Atual: {self.linha}L x {self.coluna}C')
+                if self.linha >= 5:
+                    self.safeAddstr('Aumente o terminal ou Q para sair')
+            # Retorna True para indicar que não dá pra rodar o jogo
+            return True
+        return False
 
 # ========================
 # MAIN
@@ -176,3 +300,4 @@ if __name__ == '__main__':
 
     explorador = explorarMapa()
     explorador.iniciarExploracao(arquivo)
+
